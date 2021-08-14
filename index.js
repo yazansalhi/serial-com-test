@@ -3,8 +3,12 @@ const app = express();
 
 let SerialPort = require('serialport');     // include the serialport library
 let	portName =  process.argv[2];            // get the port name from the command line
-let writeOnPort = true
+let sendBufferHeader = false
+let sendPatientInfo = false
+let sendBufferOrder = false
 const ACK_BUFFER =new Buffer([6]);
+const EOT_BUFFER =new Buffer([4]);
+
 let ENQ_BUFFER = new Buffer([5]);
 let STX_BUFFER = new Buffer([2]);
 let ETX_BUFFER = new Buffer([3]);
@@ -15,8 +19,8 @@ const ETX = 3;
 const LF = 10;
 const CR = 13;
 const EOT = 4;
-
-
+const NAK = 21;
+let counter = 0;
 
 // Message Header 
   var buffer = new Buffer(32);
@@ -36,7 +40,7 @@ const EOT = 4;
   // SENDER 
   buffer[10] = 0x68;// h
   buffer[11] = 0x6f; // o
-  buffer[12] = 0x73; // s
+  buffer[12] = 0x73; // r
   buffer[13] = 0x74;  // t  
   //buffer[14] = 0x4d;  // M
  // buffer[15] = 0x41; // A
@@ -86,26 +90,23 @@ const EOT = 4;
 
   buffer[33] = 0x7c; // |
   buffer[34] = 0x7c; // |
-
+ */
   // Patient Information
- 
 
-  // Patient ID
-  buffer[39] = 0x32; // 2
-  buffer[40] = 0x30; // 0
-  buffer[41] = 0x31; // 1
-  buffer[42] = 0x31; // 1       
-  buffer[43] = 0x31; // 1
-  buffer[44] = 0x30; // 0
-  buffer[45] = 0x31; // 1
-  buffer[46] = 0x30; // 0
-  buffer[47] = 0x30; // 0
-  buffer[48] = 0x38; // 8
-  buffer[49] = 0x35; // 5
-  buffer[50] = 0x38; // 8
-  buffer[51] = 0x33; // 3
-  buffer[52] = 0x33; // 3
-  */
+ bufferPatient = new Buffer(12);
+ bufferPatient[0] = 0x02;
+ bufferPatient[1] = 0x32;
+ bufferPatient[2] = 0x50;
+ bufferPatient[3] = 0x7c;
+ bufferPatient[4] = 0x31;
+ bufferPatient[5] = 0x7c;
+ bufferPatient[6] = 0x0D; // CR
+ bufferPatient[7] = 0x03; // ETX
+ bufferPatient[8] = 0x42; // B
+ bufferPatient[9] = 0x42; // B
+ bufferPatient[10] = 0x0D; // CR
+ bufferPatient[11] = 0x0A; // LF
+
   //
  
 // END Message Header 
@@ -115,7 +116,40 @@ const EOT = 4;
 // END Patient Information 
 
 // Test Order
+bufferOrder =  new Buffer(20);
+bufferOrder[0] = 0x02;
+bufferOrder[1] = 0x33; // LF
+bufferOrder[2] = 0x4F; // LF
+bufferOrder[3] = 0x7C; // LF
+bufferOrder[4] = 0x31; // LF
+bufferOrder[5] = 0x7C; // LF
+bufferOrder[6] = 0x53; // LF
+bufferOrder[7] = 0x50; // LF
+bufferOrder[8] = 0x45; // LF
+bufferOrder[9] = 0x43; // LF
+bufferOrder[10] = 0x31; // LF
 
+bufferOrder[11] = 0x32; // LF
+bufferOrder[12] = 0x33; // LF
+bufferOrder[13] = 0x34; // LF
+// bufferOrder[14] = 0x7C; // LF
+// bufferOrder[15] = 0x7C; // LF
+// bufferOrder[16] = 0x5E; // LF
+// bufferOrder[17] = 0x5E; // LF
+// bufferOrder[18] = 0x46; // LF
+// bufferOrder[19] = 0x65; // LF
+// bufferOrder[20] = 0x72; // LF
+// bufferOrder[21] = 0x72; // LF
+// bufferOrder[22] = 0x69; // LF
+// bufferOrder[23] = 0x74; // LF
+// bufferOrder[24] = 0x69; // LF
+// bufferOrder[25] = 0x6E; // LF
+bufferOrder[14] = 0x0D; // CR
+bufferOrder[15] = 0x03; // ETX
+bufferOrder[16] = 0x42; // 0
+bufferOrder[17] = 0x30; // 5
+bufferOrder[18] = 0x0D; // CR
+bufferOrder[19] = 0x0A; // LF
 // END Test Order
 
 let transmission = [];
@@ -152,21 +186,10 @@ myPort.on('data', readSerialData);  // called when there's new data incoming
 
 // these are the functions called when the serial events occur:
 function showPortOpen() {
-
   console.log('port open. Data rate: ' + myPort.baudRate);
-  checkSum();
   sendToSerial();
- 
 }
 
-function checkSum(){
-  var a = 0x02+0x31+0x48+0x7c+0x5c+0x5e+0x26+0x7c+0x7c+0x7c+0x68+0x6f+0x73+0x74+0x5e+0x31+0x7c+0x7c+0x7c+0x7c+0x7c+0x7c+0x7c+0x50+0x7c+0x31
-  var result = (~a + 1 >>> 0).toString(16)
-  result = result.slice(-2);
-  console.log('check sum = ',result)
-}
-
-  
 function readSerialData(data) {
   console.log('reading data ..',data);
 
@@ -175,15 +198,29 @@ function readSerialData(data) {
   if (str.length === 0) return;
 
   if (str.charCodeAt(0) === ACK) {
-    console.log('send header message')
-    if(writeOnPort){
-      console.log('wrrite')
+
+      counter++
+
+    if(!sendBufferHeader){
+      console.log('send header message')
       myPort.write(buffer,"ascii");
-      writeOnPort = false
-    }else{
-      console.log('ack after write',str.charCodeAt(0))
+      sendBufferHeader = true
+    }
+    if(!sendPatientInfo && counter > 1 ){
+      myPort.write(bufferPatient,'ascii')
+      console.log('send patient info')
+      sendPatientInfo = true
     }
 
+    if(!sendBufferOrder && counter > 2 ){
+      myPort.write(bufferOrder,'ascii')
+      console.log('send patient info')
+      sendBufferOrder = true
+    }
+   if(counter >= 3){
+    myPort.write(EOT_BUFFER,'ascii')
+    console.log('send EOT')
+   }
   }
   console.log('str.charCodeAt(0)',str.charCodeAt(0))
   if (str.charCodeAt(0) === ENQ) {
@@ -232,7 +269,10 @@ function readSerialData(data) {
 
       } else {
         if (!statement.hasStarted) {
-        
+            if(char.charCodeAt(0) === NAK && counter < 4){
+              //myPort.write(buffer,"ascii");
+              counter++
+            }
           console.log(`Unkown character received before this.statement was started, ${char}, ${char.charCodeAt()}`);
           return;
         }
