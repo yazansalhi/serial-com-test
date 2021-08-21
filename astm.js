@@ -1,24 +1,12 @@
-let { HoribaPentra60Reader, HoribaPentra60Parser } = require('node-astm');
 
-let machine = new HoribaPentra60Reader();
+/*let { ResultParser } = require('./result-parser');
 
-machine.on('log', (...args) => {
-  console.log(...args);
-});
+let parser = new ResultParser();
+let stringSample = '2Q|1|^122451||ALL|||||||O493L|1|FFE';
+let stringResult = '3R|1|^^^TSH^1|0.18|uIU/mL||N||F||||20111010113536';
+let results = parser.parse(stringSample);
+console.log(results.testResultList[0])*/
 
-machine.on('error', (error) => {
-  console.log(error);
-});
-
-machine.on('parse-error', (error) => {
-  console.log(error);
-});
-
-machine.on('data', (transmission) => {
-  let string = machine.summarizeTransmission(transmission);
-  let parser = new HoribaPentra60Parser();
-  let results = parser.parse(string);
-  console.log(results); // outputs { testResultList, suspectedPathologyList }
-})
-
-machine.initiate('COM4');
+let { TestOrder } = require('./setMessageTestOrder');
+let objOrder = new TestOrder();
+console.log(objOrder.setTestOrderMessage(123455,'COV2G'))
