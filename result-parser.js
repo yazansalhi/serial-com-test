@@ -65,7 +65,7 @@ class ResultParser {
   
         let char;
         char = line[1];
-        console.log('char',char)
+ 
         if ('01234567'.split('').indexOf(char) > -1) {
           line = line.substr(1, line.length);
         }
@@ -75,6 +75,12 @@ class ResultParser {
           let testResult = this.__parseTestResult(line);
           testResultList.push(testResult);
         }
+
+        if (char === 'O') {
+          let testResult = this.__parseTestResult(line);
+          testResultList.push(testResult);
+        }
+
         if (char === 'R') {
           let testResult = this.__parseTestResult(line);
           testResultList.push(testResult);
