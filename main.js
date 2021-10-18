@@ -1,7 +1,8 @@
 let SerialPort = require("serialport"); // include the serialport library
 const InterByteTimeout = require('@serialport/parser-inter-byte-timeout')
 let { ResultParser } = require("./result-parser");
-let { TestOrder } = require("./setMessageTestOrder");
+//let { TestOrder } = require("./setMessageTestOrder");
+let { TestOrder } = require('./testorder');
 const axios = require('axios');
 
 let portName = process.argv[2]; // get the port name from the command line
@@ -142,7 +143,6 @@ var myPort = new SerialPort(portName, {
 
 const parser = myPort.pipe(new InterByteTimeout({interval: 30}))
 
-
 // these are the definitions for the serial events:
 myPort.on("open", showPortOpen); // called when the serial port opens
 myPort.on("close", showPortClose); // called when the serial port closes
@@ -154,6 +154,7 @@ function showPortOpen() {
   console.log("port open. Data rate: " + myPort.baudRate);
 }
 
+
 function showError(error) {
   console.log("Serial port error: " + error);
 }
@@ -162,7 +163,7 @@ function showPortClose() {
   console.log("port closed.");
 }
 
-function readSerialData(data) {
+async function readSerialData(data) {
   console.log("reading data ..", data);
 
   let char = "";
@@ -186,7 +187,7 @@ function readSerialData(data) {
 
   if (str.charCodeAt(0) == EOT) {
     console.log("set message");
-    setMessage();
+   await setMessage();
   } else if (str.charCodeAt(0) != ACK && str.charCodeAt(0) != NAK) {
     console.log("send ACK");
     myPort.write(ACK_BUFFER, "ascii");
@@ -195,16 +196,20 @@ function readSerialData(data) {
   }
 }
 
-function setMessage() {
+async function setMessage() {
   console.log('message.RequestInformation',message)
   if (message.RequestInformation) {
     samples = parsResult.parse(message.RequestInformation);
     sampleId = samples.testResultList[0].sampleId;
-    let testCode = sendSampleIdToBlazma(sampleId);
 
-    bufferOrder = objOrder.setTestOrderMessage(sampleId, testCode);
-   
-    writeOnMachine(bufferOrder);
+   await sendSampleIdToBlazma(sampleId).then((testCode)=>{
+ 
+        bufferOrder = objOrder.setTestOrderMessage(sampleId, testCode);
+        writeOnMachine(bufferOrder);
+
+    });
+    
+ 
     
 
   } else if (message.ResultRecord && message.TestOrderInformation) {
@@ -215,7 +220,7 @@ function setMessage() {
     let measurementResult = results.testResultList[0].measurementResult;
     let unitResult = results.testResultList[0].unit;
 
-    sendResultsToBlazma(sampleId, measurementResult, unitResult);
+   sendResultsToBlazma(sampleId, measurementResult, unitResult);
 
     clearMessage()
   }
@@ -231,41 +236,42 @@ function sendResultsToBlazma(sampleId, measurementResult, unitResult) {
       " unitResult:" +
       unitResult
   );
-  //let profileId = 2;
- /* axios.post('http://stg.blazma.com/api/v1/terminal/'+profileId+'/samples/'+sampleId+'/result',{
+  let profileId = 4;
+  axios.post('https://staging.blazma.com/api/v1/terminal/'+profileId+'/samples/'+sampleId+'/result',{
             sample_result_measurement: measurementResult,
             sample_result_unit:unitResult
           },
           {
-                headers: {'api-key': '','profile-id':profileId}
+                headers: {'api-key': 'ce3a252deb3deaebb2ace5de1','profile-id':profileId}
           })
           .then(function (response) {
-            console.log(response);
+            console.log('response send result api ',response);
           })   
           .catch(function (error) {
-            console.log(error);
-          });*/
+            console.log('error',error.response.data);
+          });
   //
 }
 
-function sendSampleIdToBlazma(sampleId) {
+async function sendSampleIdToBlazma(sampleId) {
   console.log("send sampleId to blazma.. sampleId:", sampleId);
 
   //API POST TAKE sampleId  to blazma
- // let  testCode = '';
- // let profileId = 2;
- /* axios.get('http://stg.blazma.com/api/v1/terminal/'+profileId+'/samples/'+sampleId, {
-                headers: {'api-key': '','profile-id':profileId},
+  let  testCode = '';
+  let profileId = 4;
+  testCode = await axios.get('https://staging.blazma.com/api/v1/terminal/'+profileId+'/samples/'+sampleId, {
+                headers: {'api-key': 'ce3a252deb3deaebb2ace5de1','profile-id':profileId},
             })
        .then(function (response) {
-         console.log(response);
-         testCode = response.data.sample_code
-       })   
+         console.log('response',response.data.response.sample_code);
+         testCode = response.data.response.sample_code
+         return testCode;
+       })  
        .catch(function (error) {
-         console.log(error);
-       }); */
-//return testCode;
-  return "COV2G";
+         console.log('error',error.response.data);
+         return "COV2G";
+       }); 
+  return testCode;
 }
 
 function writeOnMachine(messageOrder) {
